@@ -27,6 +27,8 @@ For console config
     ...
 ```
 
+And migrate the migration from repository
+
 ### To run daemon
 ```
 bin/yii queue-scheduler

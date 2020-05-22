@@ -2,6 +2,7 @@
 
 namespace kfosoft\queue\commands;
 
+use kfosoft\daemon\SingleJobInterface;
 use kfosoft\queue\SchedulerQueueModelInterface;
 use kfosoft\queue\components\QueueScheduler;
 use kfosoft\daemon\Daemon;
@@ -11,7 +12,12 @@ use yii\base\InvalidConfigException;
 use yii\db\ActiveRecord;
 use yii\queue\Queue;
 
-class SchedulerJobController extends Daemon
+/**
+ * @package kfosoft\queue\commands
+ * @version 20.05
+ * @author (c) KFOSOFT <kfosoftware@gmail.com>
+ */
+class SchedulerDaemonController extends Daemon implements SingleJobInterface
 {
     /**
      * @var Queue
@@ -38,35 +44,34 @@ class SchedulerJobController extends Daemon
      * {@inheritdoc}
      * @throws Throwable
      */
-    public function doJob(array $job): bool
+    public function __invoke($job): bool
     {
-        Yii::debug(sprintf('Triggered scheduler queue worker with channel %s', $this->queueScheduler));
+        $this->queueScheduler->log(sprintf('Triggered scheduler queue worker for queue component "%s"', $this->queueScheduler->queueComponentName));
 
         $jobsForNow = $this->queueScheduler->getJobsForNow();
-        Yii::debug(sprintf('Count of scheduled jobs for now %s', count($jobsForNow)));
+        $this->queueScheduler->log(sprintf('Count of scheduled jobs for now %s', count($jobsForNow)));
 
         /** @var SchedulerQueueModelInterface|ActiveRecord $jobConfig */
         foreach ($jobsForNow as $jobConfig) {
             $jobClass = $jobConfig->getJobClass();
             $this->queueManager->push(new $jobClass($jobConfig->getJobParams()));
 
-            Yii::debug(sprintf('Send job %s with params %s to queue. Time for run %s', $jobClass, json_encode($jobConfig->getJobParams()), $jobConfig->getJobTime()));
+            $this->queueScheduler->log(sprintf('Send job %s with params %s to queue. Time for run %s', $jobClass, json_encode($jobConfig->getJobParams()), $jobConfig->getJobTime()));
 
             $jobConfig->delete();
 
-            Yii::debug(sprintf('The job %s with params %s was deleted. Time for run %s', $jobClass, json_encode($jobConfig->getJobParams()), $jobConfig->getJobTime()));
-        }
+            $this->queueScheduler->log(sprintf('The job %s with params %s was deleted. Time for run %s', $jobClass, json_encode($jobConfig->getJobParams()), $jobConfig->getJobTime()));
 
-        sleep($this->queueScheduler->daemonSleepTime);
+        }
 
         return true;
     }
 
     /**
-     * @inheritDoc
+     * {@inheritdoc}
      */
-    protected function defineJobs()
+    public function sleepTime(): int
     {
-        return [];
+        return $this->queueScheduler->daemonSleepTime;
     }
 }

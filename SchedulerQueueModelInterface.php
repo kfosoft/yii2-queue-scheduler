@@ -2,27 +2,25 @@
 
 namespace kfosoft\queue;
 
+/**
+ * @package kfosoft\queue
+ * @version 20.05
+ * @author (c) KFOSOFT <kfosoftware@gmail.com>
+ */
 interface SchedulerQueueModelInterface
 {
     /**
-     * @param string $queueChannel
      * @param string $jobClass
      * @param array  $jobParams
-     * @return ScheduledJobInterface|null
+     * @return self|null
      */
-    public static function getDelayed(string $queueChannel, string $jobClass, array $jobParams): ?ScheduledJobInterface;
+    public static function getDelayed(string $jobClass, array $jobParams): ?self;
 
     /**
-     * @param string $queueChannel
      * @param int $time
-     * @return array|ScheduledJobInterface[]
+     * @return array|SchedulerQueueModelInterface[]
      */
-    public static function getBeforeTime(string $queueChannel, int $time): array;
-
-    /**
-     * @return string queue name
-     */
-    public function getQueueChannel(): string;
+    public static function getBeforeTime(int $time): array;
 
     /**
      * @return string job class
@@ -53,9 +51,4 @@ interface SchedulerQueueModelInterface
      * @param int $time time to send job to queue
      */
     public function setJobTime(int $time): void;
-
-    /**
-     * @param string $channelName name of queue channel
-     */
-    public function setQueueChannel(string $channelName): void;
 }

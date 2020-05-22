@@ -2,40 +2,78 @@
 
 namespace kfosoft\queue\models;
 
-use kfosoft\queue\ScheduledJobInterface;
+use kfosoft\queue\components\QueueScheduler;
 use kfosoft\queue\SchedulerQueueModelInterface;
+use Yii;
 use yii\base\Exception;
+use yii\base\InvalidConfigException;
 use yii\db\ActiveRecord;
+use yii\helpers\ArrayHelper;
+use Ramsey\Uuid\Uuid;
 
 /**
- * @property int          $id           primary key
- * @property string       $queueChannel queue channel
+ * @property string       $uuid         primary key
  * @property string       $jobClass     this class should to implement SchedulerJobInterface
  * @property string|array $jobParams    job params (json)
  * @property int          $jobTime      time for send to queue
+ *
+ * @package kfosoft\queue\models
+ * @version 20.05
+ * @author (c) KFOSOFT <kfosoftware@gmail.com>
  */
 class SchedulerQueueModel extends ActiveRecord implements SchedulerQueueModelInterface
 {
     /**
      * {@inheritdoc}
+     */
+    public function beforeValidate(): bool
+    {
+        if (null === $this->uuid) {
+            $this->uuid = Uuid::uuid4()->toString();
+        }
+
+        return parent::beforeValidate();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function rules(): array
+    {
+        return ArrayHelper::merge([
+            ['uuid', 'match', 'pattern'=>'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i'],
+            [['uuid', 'jobClass', 'jobParams', 'jobTime'], 'required'],
+            ['jobTime', 'integer', 'integerOnly' => true,],
+        ], parent::rules());
+    }
+
+    /**
+     * {@inheritdoc}
+     * @throws InvalidConfigException
+     */
+    public static function tableName(): string
+    {
+        return Yii::$app->get(QueueScheduler::COMPONENT_NAME)->tableName;
+    }
+
+    /**
+     * {@inheritdoc}
      * @throws Exception
      */
-    public static function getDelayed(string $queueChannel, string $jobClass, array $jobParams): ?ScheduledJobInterface
+    public static function getDelayed(string $jobClass, array $jobParams): ?SchedulerQueueModelInterface
     {
         return static::find()
-            ->where(['queueChannel' => ':qc', 'jobClass' => ':jc', 'jobParams' => ':jp'])
-            ->params([':qc' => $queueChannel, ':jc' => $jobClass, ':jp' => static::serializeToJson($jobParams)])
+            ->where(['jobClass' => $jobClass, 'jobParams' => static::serializeToJson($jobParams)])
             ->one();
     }
 
     /**
      * {@inheritdoc}
      */
-    public static function getBeforeTime(string $queueChannel, int $time): array
+    public static function getBeforeTime(int $time): array
     {
         return static::find()
-            ->where(['queueChannel' => ':qc', 'jobTime' => ':jt'])
-            ->params([':qc' => $queueChannel, ':jt' => $time])
+            ->where('jobTime <= :jt', [':jt' => $time])
             ->all();
     }
 
@@ -86,14 +124,6 @@ class SchedulerQueueModel extends ActiveRecord implements SchedulerQueueModelInt
     /**
      * {@inheritdoc}
      */
-    public function getQueueChannel(): string
-    {
-        return $this->queueChannel;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function setJobClass(string $class): void
     {
         $this->setAttribute('jobClass', $class);
@@ -113,14 +143,6 @@ class SchedulerQueueModel extends ActiveRecord implements SchedulerQueueModelInt
     public function setJobTime(int $time): void
     {
         $this->setAttribute('jobTime', $time);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setQueueChannel(string $channelName): void
-    {
-        $this->setAttribute('queueChannel', $channelName);
     }
 
     /**

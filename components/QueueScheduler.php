@@ -2,6 +2,7 @@
 
 namespace kfosoft\queue\components;
 
+use kfosoft\queue\commands\SchedulerDaemonController;
 use kfosoft\queue\models\SchedulerQueueModel;
 use kfosoft\queue\SchedulerQueueModelInterface;
 use kfosoft\queue\ScheduledJobInterface;
@@ -10,22 +11,69 @@ use DateTimeZone;
 use Exception;
 use Throwable;
 use Yii;
+use yii\base\BootstrapInterface;
+use yii\base\Component;
+use yii\console\Application as ConsoleApplication;
 use yii\db\ActiveRecord;
 use yii\db\StaleObjectException;
+use yii\helpers\ArrayHelper;
+use yii\log\Logger;
 
-class QueueScheduler
+/**
+ * @package kfosoft\queue\components
+ * @version 20.05
+ * @author (c) KFOSOFT <kfosoftware@gmail.com>
+ */
+class QueueScheduler extends Component implements BootstrapInterface
 {
+    /**
+     * Component name
+     */
     public const COMPONENT_NAME = 'queue-scheduler';
 
+    /**
+     * @var string you can change model class name for don't use SchedulerQueueModel. But this class has to be implement the SchedulerQueueModelInterface.
+     */
     public $modelClassName = SchedulerQueueModel::class;
 
+    /**
+     * @var string you can change name of database table without change SchedulerQueueModel
+     */
+    public $tableName = 'SchedulerQueue';
+
+    /**
+     * @var string name of queue component
+     * @see yiisoft/yii2-queue
+     */
     public $queueComponentName = 'queue';
 
-    public $queueChannel = 'default';
-
+    /**
+     * @var string name of database component
+     */
     public $db = 'db';
 
-    public $daemonSleepTime = 60;
+    /**
+     * @var int this timeout defines time between reading of SchedulerQueue database
+     */
+    public $daemonSleepTime = 10;
+
+    /**
+     * {@inheritdoc}
+     * @throws Throwable
+     */
+    public function bootstrap($app): void
+    {
+        if ($app instanceof ConsoleApplication) {
+            $request = $app->request->resolve();
+            if (preg_match('/migrate\//', $request[0])) {
+                return;
+            } elseif (preg_match('/migrate/', $request[0])) {
+                return;
+            }
+
+            $app->controllerMap = ArrayHelper::merge($app->controllerMap, ['queue-scheduler' => SchedulerDaemonController::class]);
+        }
+    }
 
     /**
      * @return array|SchedulerQueueModelInterface[]
@@ -38,7 +86,7 @@ class QueueScheduler
 
         $time = (new DateTime('now', new DateTimeZone('UTC')))->getTimestamp();
 
-        return $modelClass::getBeforeTime($this->queueChannel, $time);
+        return $modelClass::getBeforeTime($time);
     }
 
     /**
@@ -59,20 +107,19 @@ class QueueScheduler
             ->getTimestamp();
 
         if ($this->hasDelayed($job)) {
-            Yii::debug(sprintf('Try to add existent job: Queue Channel: %s, Job Class: %s, Job Params: %s, Job Time: %s', $this->queueChannel, $jobClass, json_encode($jobParams), $runTime));
+            $this->log(sprintf('Try to add existent job: Job Class: %s, Job Params: %s, Job Time: %s', $jobClass, json_encode($jobParams), $runTime));
             return false;
         }
 
         /** @var SchedulerQueueModelInterface|ActiveRecord $model */
         $model = new $modelClass();
-        $model->setQueueChannel($this->queueChannel);
         $model->setJobClass($jobClass);
         $model->setJobParams($jobParams);
         $model->setJobTime($runTime);
 
         $result = $model->save();
 
-        Yii::debug(sprintf('Status of adding scheduled job: Queue Channel: %s, Job Class: %s, Job Params: %s, Job Time: %s, Saving result: %s', $this->queueChannel, $jobClass, json_encode($jobParams), $runTime, $result));
+        $this->log(sprintf('Status of adding scheduled job: Job Class: %s, Job Params: %s, Job Time: %s, Saving result: %s', $jobClass, json_encode($jobParams), $runTime, $result));
 
         return $result;
     }
@@ -86,7 +133,7 @@ class QueueScheduler
         /** @var SchedulerQueueModelInterface $modelClass */
         $modelClass = $this->modelClassName;
 
-        return (bool) $modelClass::getDelayed($this->queueChannel, get_class($job), $job->getJobParams());
+        return (bool) $modelClass::getDelayed(get_class($job), $job->getJobParams());
     }
 
     /**
@@ -103,13 +150,23 @@ class QueueScheduler
         $jobParams = $job->getJobParams();
 
         /** @var ActiveRecord $model */
-        $model = $modelClass::getDelayed($this->queueChannel, $jobClass, $jobParams);
+        $model = $modelClass::getDelayed($jobClass, $jobParams);
 
         if (null === $model) {
-            Yii::debug(sprintf('Try to remove not existent job. Queue Channel: %s, Job Class: %s, Job Params: %s', $this->queueChannel, $jobClass, json_encode($jobParams)));
+            $this->log(sprintf('Try to remove not existent job. Job Class: %s, Job Params: %s', $jobClass, json_encode($jobParams)));
             return;
         }
 
-        Yii::debug(sprintf('Status of removing scheduled job: Queue Channel: %s, Job Class: %s, Job Params: %s, Removing result %s', $this->queueChannel, $jobClass, json_encode($jobParams), $model->delete()));
+        $this->log(sprintf('Status of removing scheduled job: Job Class: %s, Job Params: %s, Removing result %s', $jobClass, json_encode($jobParams), $model->delete()));
+    }
+
+    /**
+     * @param string $message
+     * @param int $level
+     */
+    public function log(string $message, $level = Logger::LEVEL_TRACE): void
+    {
+        Yii::$app->log->logger->log($message, $level, 'queue');
+        Yii::$app->log->logger->flush(true);
     }
 }

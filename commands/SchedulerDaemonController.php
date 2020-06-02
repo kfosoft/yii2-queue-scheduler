@@ -13,8 +13,9 @@ use yii\db\ActiveRecord;
 use yii\queue\Queue;
 
 /**
+ * Runs queue scheduler daemon.
  * @package kfosoft\queue\commands
- * @version 20.05
+ * @version 20.06
  * @author (c) KFOSOFT <kfosoftware@gmail.com>
  */
 class SchedulerDaemonController extends Daemon implements SingleJobInterface

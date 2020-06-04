@@ -2,8 +2,8 @@
     "name": "kfosoft/yii2-queue-scheduler",
     "description": "Extension provides functionality for make scheduled job for yii2-queue lib",
     "type": "yii2-extension",
-    "keywords": ["yii2","extension", "daemon"],
-    "license": "BSD-3-Clause",
+    "keywords": ["yii2", "extension", "daemon", "yii2-queue", "queue-scheduler", "yii2-queue-scheduler"],
+    "license": "MIT",
     "authors": [
         {
             "name": "Kyrylo Checherskyi",
@@ -14,7 +14,7 @@
         "php": ">=7.2",
         "yiisoft/yii2": ">=2.0.34",
         "ext-json": "*",
-        "kfosoft/yii2-daemon": "20.06.04",
+        "kfosoft/yii2-daemon": "20.06",
         "ramsey/uuid": "^4.0"
     },
     "autoload": {
